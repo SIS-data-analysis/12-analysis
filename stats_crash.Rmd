@@ -1,0 +1,210 @@
+---
+title: "Stats crash course"
+date: "`r Sys.Date()`"
+author: "Austin Hart"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    code_folding: show
+    use_bookdown: true
+    thumbnails: false
+    default_style: "dark"
+    downcute_theme: "default"
+---
+
+
+```{r setup, include=FALSE}
+## Libraries
+  library(knitr)
+  library(rmdformats)
+  library(tidyverse)
+  library(stargazer)
+
+## Global options
+knitr::opts_chunk$set(
+  echo = T, prompt = F,  tidy = F, 
+  comment = NA, message = F, warning = F
+)
+```
+
+# Intro
+Analysts use statistics to summarize characteristics of observed cases and to estimate parameters of a population beyond them. Let's call these descriptive and inferential statistics respectively, though they often blend together in practice. Let's review both with an eye to communicating statistical analysis to a general audience. Given your training and what we've already covered this semester, we'll focus largely on evaluating relationships ("what is the impact of $x$ on $y$?").
+
+## General notation  
+A few things to keep straight:  
+
+- $Y$: dependent, outcome, or response variable
+- $X$: independent, exposure, or predictor variable
+- $Z$: confounder or control variable
+- $i$: a unit or case in some population of interest
+- $Y_i$: observed value of $Y$ for unit $i$
+
+Recall also that we use different notation for a sample statistic versus a population parameter:
+
+|                        | Statistic   | Parameter  |
+|-----------------------:|:-----------:|:----------:|
+| Size                   | $n$         | $N$        |
+| Expectation, $E(Y)$    | $\bar{Y}$   | $\mu$      |
+| Std. deviation         | $s$         | $\sigma$   |
+| Slope coefficient      | $b$         | $\beta$    |
+
+
+## Descriptive statistics
+The aim is to communicate. Tell the audience about the characteristics of the data you collected. This should include a visual or tabular depiction of the distribution and appropriate statistical values. Descriptive analysis can focus on a single variable or the relationship among multiple variables. 
+
+## Inferential statistics
+A common goal of data analysis is to use what we see in a sample of data to estimate parameters of a broader population. It is critical to remember that this process is probabilistic. This seems obvious insofar as you're using a statistic calculated from one sample of units to estimate, or test arguments about, an unobserved population. 
+
+The core problem is sampling variability, or the tendency of samples to yield different estimates. The bad news is that you can never know where your sample statistic falls within the distribution of possible sample statistics (the sampling distribution) or how close your estimate is to the parameter of interest. The good news is that you know a ton about the behavior of sample statistics. We know, for example, that $\bar{Y} \sim N(\mu, \frac{\sigma}{\sqrt{n}})$:
+
+- $\bar{Y} \sim N$, sample means follow a normal distribution 
+- $E(\bar{Y}) = \mu$, sample mean is an unbiased estimator 
+- its variability, or standard error, equals $\sigma/\sqrt{n}$^[In practice, the population standard deviation, $\sigma$, is unknown, and we use the sample standard deviation, $s$, instead. The sample standard deviation follows the Student's $t$ distribution.]
+
+This allows us to construct confidence intervals around the estimate and/or to calculate the probability of observing certain values given some assumption about the population. We call that assumption the null hypothesis. 
+
+- Significance level, $\alpha$: probability threshold for rejecting null hypothesis, typically 0.05, or probability of rejecting a true null hypothesis (Type I error)
+- $p$-value: probability of observing a sample statistic given the null hypothesis
+- Statistically significant: unlikely to be the result of chance alone given the null hypothesis; established when $p < \alpha$
+- Confidence level, $1 - \alpha$: desired precision of estimated interval, typically 95%. In this case indicating that across all samples, 95% of such intervals include the parameter of interest.
+- Confidence interval: a range of estimates for an unknown parameter, typically constructed by padding the sample statistic with a margin of error. 
+
+
+
+## Data for this exercise  
+We rely on the Quality of Government (QOG) Standard data (version Jan23, time series). Refer to [the QOG codebook](https://www.qogdata.pol.gu.se/data/std_codebook_jan23.pdf) for further description of the data.
+
+```{r data}
+# load QOG data
+  load('qog_std_cs.rdata')
+```
+
+
+# Continuous outcome variables
+All roads lead the mean. Statistical analysis of a continuous random variable, $Y$, traditionally focuses on the mean and how it changes conditional on other variables, e.g., $X$ and $Z$. The process usually starts with calculating basic summary statistics (e.g., mean, median, min, max) and making a histogram to explore the distribution of values on the key variables, especially $Y$. Then we might use a scatter plot to explore a relationship, and build into hypothesis testing. For the sake of time, let's try to tell this story through ordinary least squares (OLS) regression.
+
+## Linear regression as you know it. 
+Regression analysis begins with a regression equation, or a model of the expected value of the outcome variable. Consider a model that treats the expected value of $Y$ as a linear function of $X$:
+
+$$
+E(Y|X) = \beta X_i + \theta
+$$
+
+with two coefficients:  
+- $\beta$, the expected change in $Y$ for a unit-increase in $X$
+- $\theta$, the constant, or $E(Y|X = 0)$
+
+This a model chosen to represent the relationship of interest; it isn't meant to predict $Y$ without error. We define error, $e_i$ as:
+
+$$
+e_i = Y_i - E(Y)
+$$
+
+or the distance between the observed and predicted values of $Y$. We can re-arrange terms above to see that the observed values are equal to the expectation (the line) plus error:
+
+$$
+\begin{aligned}
+y_i &= E(y) + e_i \\
+    &= (\beta x_i + \alpha) + e_i
+\end{aligned}
+$$
+
+Acknowledging the inevitability of error, we still might think that a well-chosen line is one with less error. This is the logic of Ordinary Least Squares (OLS) regression. OLS is a method of choosing parameters of a linear model, $\beta$ and $\theta$, that minimize the sum of squared errors, $\min \sum e_i^2$. 
+
+
+Try regressing `vdem_corr` on `wdi_wip`. Then generate the linear prediction and calculate error for each case.
+
+```{r err}
+  library(modelr)
+
+# Estimate model
+  mod1 = lm(vdem_corr ~ wdi_wip, data = qog)
+    mod1
+    
+  select(qog, cname, vdem_corr, wdi_wip) %>%
+    na.omit() %>%
+    add_predictions(mod1, var = 'pred') %>% # adds model predictions
+    mutate(error = vdem_corr - pred) %>% # calculate error
+    DT::datatable() %>%
+    DT::formatRound(columns = 2:5, digits = 2)
+  
+```
+
+What do I tell people about this? Just interpret the slope coefficient: *The expected corruption score drops by 0.008 for a one-point increase in women in parliament. The relationship is statistically significant $p < 0.05$.*
+
+Visualize the relationship and think about the prediction and the error respectively.
+
+```{r plot}
+  ggplot(qog, aes(y = vdem_corr, x = wdi_wip)) +
+  geom_point(shape = 21) +
+  geom_smooth(method = 'lm') +
+  theme_minimal()
+```
+
+## Multiple regression
+Imagine that variable $Z$ is correlated with both $X$ and $Y$. The appropriate model to estimate, in this case, would be:
+
+$$
+E(Y|X,Z) = \beta_1 X_i + \beta_2 Z_i + \theta
+$$
+Where the key coefficient is $\beta_1$: the expected change in $Y$ for a unit-increase in $X$, net of $Z$.
+
+The critical point is that if you ignore $Z$ and estimate the bivariate model $(\beta X_i + \theta)$ in this context, the bivariate slope coefficient, $\beta$ suffers from confounding bias. In essence, it absorbs some of the association between $Z$ and $Y$, and the estimate is not truly "independent" of other factors.
+
+Give it a try:
+
+```{r multi, results='asis'}
+# multiple reg
+  mod2 = lm(vdem_corr ~ wdi_wip + undp_hdi, qog)
+
+# table
+  stargazer(mod1, mod2, type = 'html', keep.stat = 'n')
+```
+Now interpret the findings.
+
+## Without predictors
+We don't actually need any covariates in a linear regression model. Consider the simplest case of the unconditional expectation:
+
+$$
+E(Y) = \theta
+$$
+where $\theta$ is a parameter of a line, specifically the intercept of a horizontal line. As above, the aim with OLS regression is to select the line that minimizes error:
+
+$$
+e_i = Y_i - E(Y)
+$$
+or the distance between the observed and predicted values of $Y$. In the unconditional model, the value that minimizes error is simply the mean of $Y$, $\theta = \mu$. Again, regression is just a model of the mean. To see this in practice, calculate the mean of `vdem_corr` and then estimate a regression of `vdem_corr` on a constant, 1.
+
+
+```{r mean}
+# Calculate the mean  
+  mean(qog$vdem_corr, na.rm = T)
+
+# Regression as model of the mean
+  lm(vdem_corr ~ 1, qog)
+```
+
+## Binary predictors (dummies)  
+Assume that you have a binary exposure variable, $X$, and you want to compare the group means?
+
+```{r table}
+# calculate group means
+  group_by(qog, br_dem) %>%
+    summarize(mean = mean(vdem_corr, na.rm = T))
+```
+
+What if you include it as a predictor in the regression model. What happens? 
+
+```{r regbin, results = 'asis'}
+# regression
+  mod2 = lm(vdem_corr ~ br_dem, qog)
+  stargazer(mod2, type = 'html', keep.stat = 'n')
+```
+What do the intercept and coefficient here represent? The interpretation of the slope coefficient follows the prior example, but it's important to note that a one-unit increase in $X$ means a shift from 0 to 1 (e.g., average difference in corruption for a democracy relative to non-democracy).
+
+## Lots of categories
+What do you do with a polytomous variable? Include them! The binary predictor (identifying two groups) enters the model as a single dummy variable. For multiple categories, include a dummy variable for each category except one. The excluded category becomes the reference. 
+
+## Linear transformation
+What about when the mean is not an appropriate representation of central tendency? 
+
