@@ -19,16 +19,17 @@ output:
   library(rmdformats)
   library(tidyverse)
   library(stargazer)
+  library(kableExtra)
 
 ## Global options
 knitr::opts_chunk$set(
-  echo = T, prompt = F,  tidy = F, 
+  echo = T, eval = F, prompt = F,  tidy = F, 
   comment = NA, message = F, warning = F
 )
 ```
 
 # Intro
-Analysts use statistics to summarize characteristics of observed cases and to estimate parameters of a population beyond them. Let's call these descriptive and inferential statistics respectively, though they often blend together in practice. Let's review both with an eye to communicating statistical analysis to a general audience. Given your training and what we've already covered this semester, we'll focus largely on evaluating relationships ("what is the impact of $x$ on $y$?").
+Analysts use statistics to summarize characteristics of observed cases and to estimate parameters of a population beyond them. Let's call these descriptive and inferential statistics respectively, though they often blend together in practice. Let's review both with an eye to communicating statistical analysis to a general audience. 
 
 ## General notation  
 A few things to keep straight:  
@@ -39,7 +40,7 @@ A few things to keep straight:
 - $i$: a unit or case in some population of interest
 - $Y_i$: observed value of $Y$ for unit $i$
 
-Recall also that we use different notation for a sample statistic versus a population parameter:
+Recall also that we use different notation for characteristics of a sample (statistics) versus a population (parameters):
 
 |                        | Statistic   | Parameter  |
 |-----------------------:|:-----------:|:----------:|
@@ -53,37 +54,304 @@ Recall also that we use different notation for a sample statistic versus a popul
 The aim is to communicate. Tell the audience about the characteristics of the data you collected. This should include a visual or tabular depiction of the distribution and appropriate statistical values. Descriptive analysis can focus on a single variable or the relationship among multiple variables. 
 
 ## Inferential statistics
-A common goal of data analysis is to use what we see in a sample of data to estimate parameters of a broader population. It is critical to remember that this process is probabilistic. This seems obvious insofar as you're using a statistic calculated from one sample of units to estimate, or test arguments about, an unobserved population. 
-
-The core problem is sampling variability, or the tendency of samples to yield different estimates. The bad news is that you can never know where your sample statistic falls within the distribution of possible sample statistics (the sampling distribution) or how close your estimate is to the parameter of interest. The good news is that you know a ton about the behavior of sample statistics. We know, for example, that $\bar{Y} \sim N(\mu, \frac{\sigma}{\sqrt{n}})$:
+A common goal of data analysis is to use what we see in a sample of data to estimate parameters of a broader population. It is critical to remember that this process is probabilistic. The core problem is sampling variability, or the tendency of different samples to yield different statistics and, therefore, different estimates of the population parameter. The bad news is that you can never know where your sample statistic falls within the distribution of possible sample statistics (the sampling distribution) or how close your estimate is to the parameter of interest. The good news is that you know a ton about the behavior of sample statistics. We know from the Central Limit Theorem, for example, that $\bar{Y} \sim N(\mu, \frac{\sigma}{\sqrt{n}})$:
 
 - $\bar{Y} \sim N$, sample means follow a normal distribution 
 - $E(\bar{Y}) = \mu$, sample mean is an unbiased estimator 
-- its variability, or standard error, equals $\sigma/\sqrt{n}$^[In practice, the population standard deviation, $\sigma$, is unknown, and we use the sample standard deviation, $s$, instead. The sample standard deviation follows the Student's $t$ distribution.]
+- the standard error of sample means equals $\sigma/\sqrt{n}$^[In practice, the population standard deviation, $\sigma$, is unknown, and we use the sample standard deviation, $s$, instead. The sample standard deviation follows the Student's $t$ distribution.]
 
-This allows us to construct confidence intervals around the estimate and/or to calculate the probability of observing certain values given some assumption about the population. We call that assumption the null hypothesis. 
+This allows us to calculate the probability of observing certain values given some assumption about the population parameter. We call that assumption the null hypothesis. The null hypothesis is typically the "status quo" expectation, and it is the logical opposite of your expectation, the alternative hypothesis. For example, we might expect that the population mean of $Y$ is greater than 50. The null is anything that invalidates this expectation.
 
-- Significance level, $\alpha$: probability threshold for rejecting null hypothesis, typically 0.05, or probability of rejecting a true null hypothesis (Type I error)
-- $p$-value: probability of observing a sample statistic given the null hypothesis
-- Statistically significant: unlikely to be the result of chance alone given the null hypothesis; established when $p < \alpha$
-- Confidence level, $1 - \alpha$: desired precision of estimated interval, typically 95%. In this case indicating that across all samples, 95% of such intervals include the parameter of interest.
-- Confidence interval: a range of estimates for an unknown parameter, typically constructed by padding the sample statistic with a margin of error. 
+- $H_A: ~ \mu > 50$
+- $H_0: ~ \mu \leq 50$ 
 
+We test the null hypothesis. Specifically, we evaluate the probability of observing our sample statistic, $\bar{Y}$ in this case, assuming the null hypothesis is true. We hold onto that null hypothesis until the probability, $p$, drops below a predetermined threshold, typically 0.05. 
 
 
-## Data for this exercise  
-We rely on the Quality of Government (QOG) Standard data (version Jan23, time series). Refer to [the QOG codebook](https://www.qogdata.pol.gu.se/data/std_codebook_jan23.pdf) for further description of the data.
+A few terms to keep straight:
+
+- **Significance level**, $\alpha$: probability threshold for rejecting null hypothesis, typically 0.05. Also the probability of rejecting a true null hypothesis (Type I error)
+- **$p$-value**: probability of observing a sample statistic given the null hypothesis
+- **Statistically significant**: unlikely to be the result of chance alone given the null hypothesis; established when $p < \alpha$
+- **Confidence interval**: a range of estimates for an unknown parameter, typically constructed by padding the sample statistic with a margin of error. 
+- **Confidence level**, $1 - \alpha$: precision of estimated interval, typically 95%. In this case indicating that across all samples, 95% of such intervals include the parameter of interest.
+
+
+
+## Data and packages  
+Use the Quality of Government (QOG) Standard data (version Jan23, cross section). Refer to [the QOG codebook](https://www.qogdata.pol.gu.se/data/std_codebook_jan23.pdf) for further description of the data.
 
 ```{r data}
 # load QOG data
-  load('qog_std_cs.rdata')
+  qog = haven::read_dta('qog_std_cs_jan23_stata14.dta') %>%
+    mutate(across(where(haven::is.labelled), as_factor))
 ```
 
+I rely on several packages for this exercise:
+```{r packs}
+# load packages
+  library(tidyverse)
+  library(knitr)
+  library(modelr)
+  library(stargazer)
+  library(kableExtra)
+```
+# Numeric outcome variable
+I have a numeric variable, and I want to tell the world all about it. What now? All roads eventually lead to the mean. It's not quite true, but it's pretty close. Keep that in mind here, and refer to the later sections on the transformations we might consider to mitigate skew (i.e., to normalize a distribution so that we can use the mean!).
 
-# Continuous outcome variables
-All roads lead the mean. Statistical analysis of a continuous random variable, $Y$, traditionally focuses on the mean and how it changes conditional on other variables, e.g., $X$ and $Z$. The process usually starts with calculating basic summary statistics (e.g., mean, median, min, max) and making a histogram to explore the distribution of values on the key variables, especially $Y$. Then we might use a scatter plot to explore a relationship, and build into hypothesis testing. For the sake of time, let's try to tell this story through ordinary least squares (OLS) regression.
+## One continuous variable  
+### Summary statistics  
+The best place to start is with the relevant moments and ranks of the distribution.^[The first three moments of a distribution are the mean, variance, and skew. Ranks are the centiles, e.g., the median (50th percentile) or maximum (100th percentile).] In almost every case, you want to know and communicate:
 
-## Linear regression as you know it. 
+- minimum and maximum scores
+- central tendency (mean/median)
+- dispersion (e.g., standard deviation)
+- skewness
+- any interesting or unusual features/patterns
+
+You can use the classic `summary()` function to get most of this. You can also use `summarize()` from `tidyverse` for a more tailored (and table friendly) output.
+
+```{r sumstats}
+# Summary stats 
+  summary(qog$wdi_wip)
+
+# Tidyverse approach
+  summarise(qog,
+    n = sum(!is.na(wdi_wip)),
+    Avg = mean(wdi_wip, na.rm = T),
+    StdDev = sd(wdi_wip, na.rm = T),
+    `0` = min(wdi_wip, na.rm = T),
+    `50` = median(wdi_wip, na.rm = T),
+    `100` = max(wdi_wip, na.rm = T)
+  ) %>%
+  kable(digits = 1L) %>%
+  add_header_above(header = c(" " = 3, "Percentiles" = 3))
+```
+
+### Visualization
+Simple is good here. Density plots are nice but can be difficult to explain. Box plots suffer the same fate. Histograms are a good compromise. Fully bare bones examples:
+
+```{r sumvis}
+# Base plot
+  p = ggplot(qog, aes(x = wdi_wip)) + theme_minimal()
+
+# Density plot
+  p + geom_density(fill = 'cornflowerblue')
+  
+# Box plot
+  p + geom_boxplot()
+  
+# Histogram
+  p + geom_histogram(color = 'white')
+```
+
+### Testing hypotheses
+A one-sample $t$−test, `t.test()`, compares the sample mean to a hypothesized population mean. The resulting $p$-value indicates the probability of observing a sample mean like the one in your data from a population defined by the null hypothesis.
+
+For example, evaluate the argument that women's representation across countries is above one-third $(H_0: ~ \mu \geq 33)$. Use this value as `mu`. Note also that this is a one-sided test, and the altnerative hypothesis is $H_A: ~ \mu < 33$. So we specify the `alternative` is 'less'.
+
+```{r ttest1}
+# One-sample t-test
+  t.test(qog$wdi_wip, mu = 33, alternative = 'less')
+```
+Note that $p < 0.05$ (`p-value < 2.2e-16`) and we can reject the null hypothesis. That means the sample mean of 22.8 is significantly lower than 33; alternatively, you might report that it is highly unlikely that we obsvere a mean this low from a population with a mean of 33 or higher. 
+
+
+## Group comparisons
+### Summary stats
+Let's compare the distribution of $Y$ across discrete categories of $X$. This requires identifying the grouping variable and piping into a `summarize` as before.
+
+```{r groupsum}
+# Create table
+  tab = 
+    group_by(qog, ht_region) %>%
+    summarise(
+        n = sum(!is.na(wdi_wip)),
+        Avg = mean(wdi_wip, na.rm = T),
+        StdDev = sd(wdi_wip, na.rm = T),
+        `0` = min(wdi_wip, na.rm = T),
+        `50` = median(wdi_wip, na.rm = T),
+        `100` = max(wdi_wip, na.rm = T)
+      ) %>%
+      na.omit()
+
+# Format for output
+  tab %>%
+    kable(digits = 1L) %>%
+    add_header_above(header = c(" " = 4, "Percentiles" = 3))
+```
+
+### Visualization
+To visualize group differences, consider boxplots by group or simply plotting the means from the table of summary stats.
+
+```{r groupviz}
+# Box plots
+  ggplot(qog, aes(x = fct_reorder(ht_region, wdi_wip, .fun = 'median'), 
+                  y = wdi_wip)) +
+    geom_boxplot() +
+    coord_flip()
+
+# Mean plot
+  ggplot(tab, aes(x = fct_reorder(ht_region, Avg), y = Avg)) +
+    geom_col() +
+    coord_flip()
+```
+
+### Testing hypotheses
+Want to know if the distrbution of $Y$ differs significantly across the categories of $X$? Use a difference of means $(t)$ test for a binary $X$; Use analysis of variance (ANOVA, $F$- test) where $X$ identifies more than two categories.
+
+Evaluate the argument that women's representation is significantly lower in majoritarian electoral systems relative to proportional representation systems:
+
+```{r ttest}
+# Difference of means test
+  t.test(wdi_wip ~ br_pvote, data = qog, alternative = 'less')
+```
+Note the line of statistics: `t = -4.832, df = 185, p-value = 1.414e-06`. Use these to describe the results. I find that women hold significantly fewer seats in non-PR systems than where seats are allocated proportionally. Specifically, women hold an average of 19% of seats in national parliament in non-PR electoral systems compared to 27% of seats in PR systems. It is unlikely we observe this difference by chance alone $(t = -4.83, df = 185, p < 0.05)$. 
+
+Next consider representation across region. ANOVA tests the null hypothesis that the group means are all equal $(\mu_1 = \mu_2 = \mu_3 ...)$.
+
+```{r aov}
+# Analysis of variance (ANOVA)
+  aov(wdi_wip ~ ht_region, qog) %>%
+    summary(.)
+```
+Follow the factor `ht_region` across the row to find the relevant $F$ and $p$ values. Here we see that observed differences in representation across regions is statistically significant $F_{df=9} = 8.39, ~ p< 0.05)$.
+
+# Counts and frequencies   
+Categorical outcome measures require a different approach. Rather than summary statistics, the relevant information here is the frequency with which each value or category appears in the data.
+
+## One categorical variable
+Simple: just make a relative frequency table or bar chart and describe what you see. What's the modal category? Any unusual values of note?
+
+```{r count}
+# Relative frequency table
+  ft = count(qog, nelda_mbbe) %>%
+    na.omit() %>%
+    mutate(percent = n/sum(n) * 100) 
+
+  ft %>%
+    kable(digits = 1L)
+  
+# Column plot
+  ggplot(ft, aes(x = nelda_mbbe, y = percent)) +
+    geom_col() +
+    coord_flip()
+```
+
+## Cross-tabulation
+One thing I find extremely clunky in R are cross-tabulations. There are some packages that do this quite well. I'll stick to the tidyverse solution here.
+
+We use cross-tabs to evaluate associations between categorical variables. The key is getting the construction right: 
+
+- categories of $Y$ define the rows; categories of $X$ define the columns
+- calculate relative frequency within $X$ (so cols sum to 100%)
+
+```{r xtab}
+# 1. Raw tabulation
+  xtab =
+    count(qog, nelda_mbbe, br_pvote) %>%  # (OutcomeVar,ExposureVar)
+    na.omit() %>% 
+    pivot_wider( # into a 2-way table
+      names_from = br_pvote, # MUST be the ExposureVar
+      values_from = n, 
+      values_fill = 0
+    )
+# 2. Chi squared test of independence
+  chisq.test(xtab[-1]) # drop the names columns
+  
+# 3. Table for presentation
+  xtab %>%
+    mutate(Total = rowSums(.[-1])) %>% # add total col
+    mutate_at(-1, ~ 100 * ./sum(.)) %>% # convert to % in column
+    kable(digits = 1L) %>%
+    add_header_above(header = c(" " = 1, "PR system" = 2, " " = 1))
+
+```
+You can see there is a relationship between electoral system and the presence of media bias prior to an election. Among non-PR systems, 51% see media bias in advance of the election and roughly 45% do not. In PR systems, by contrast, less than one-third see the bias and nearly two-thirds do not.  The differences are statistically significant $(\chi^2_{df=2}=6.64,~p=0.04)$. 
+
+
+# Linear regression
+
+Linear regression allows us to model the association between a continuous outcome variable, $Y$, and some set of explanatory variables, e.g., $X$ and $Z$. It's an incredibly flexible and powerful tool, especially for estimating conditional effects, or reducing potential bias due to confounding. 
+
+## Regression model
+We begin by modelling the outcome as a linear function of some covariates and an error term. For example:
+
+$$
+Y_i = \beta_1 X_i + \beta_2 Z_i + \theta + e_i
+$$
+where:  
+
+- $\beta_1$ the partial slope coefficient on $X$; indicates the expected change in $Y$ for a unit-increase in $X$ while holding $Z$ fixed  
+- $\beta_2$ the partial slope coef. on $Z$; indicates expected change in $Y$ for a unit-increse in $Z$ while holding $X$ fixed  
+- $\theta$ the intercept or constant; represents $E(Y|X = Z = 0)$
+- $e_i$ is the error term; represents residual variation in $Y$ and captures both random noise and influence of other causes of $Y$ not included in the model. 
+
+Our primary interest is the estimate of $\beta_1$. However, to estimate this parameter without bias, we must include any potential confounder as a covariate in the model. If, for example, we mistakenly ignore $Z$ and specify the bivariate model:
+
+$$
+Y_i = \beta_1^* X_i + \theta^* + e_i
+$$
+
+then the estimated coefficient on $X$ will be biased: $\beta_1^* \neq \beta_1$. So take care in specifying your regression models and be sure to identify and include any factor you suspect is correlated with both $Y$ and $X$.
+
+
+## OLS estimation
+We typically use ordinary least squares (OLS) to estimate the parameters of a regression equation. The logic is very simple: find the values of the parameters the jointly minimize the sum of squared errors, $\min \sum e_i^2$. This gives us the estimates from our sample data:
+
+$$
+\begin{aligned}
+Y_i &= E(Y|X,Z) + e_i \\
+    &= (b_1 X_i + b_2 Z_i + a) + e_i
+\end{aligned}
+$$
+
+Note that the error term is equal to the difference between the observed $Y$ in the data and the expected value of $Y$ from the model. Rearranging from above:
+
+$$
+e_i = Y_i - (b_1 X_i + b_2 Z_i + a)
+$$
+
+Try regressing `vdem_corr` on `wdi_wip`. Then generate the linear prediction and calculate error for each case.
+
+```{r err}
+  library(modelr)
+
+# Estimate model
+  mod1 = lm(vdem_corr ~ wdi_wip, data = qog)
+    mod1
+    
+  select(qog, cname, vdem_corr, wdi_wip) %>%
+    na.omit() %>%
+    add_predictions(mod1, var = 'pred') %>% # adds model predictions
+    mutate(error = vdem_corr - pred) %>% # calculate error
+    DT::datatable() %>%
+    DT::formatRound(columns = 2:5, digits = 2)
+  
+```
+
+Visualize the relationship and think about the prediction and the error respectively.
+
+```{r plot}
+  ggplot(qog, aes(y = vdem_corr, x = wdi_wip)) +
+  geom_point(shape = 21) +
+  geom_smooth(method = 'lm') +
+  theme_minimal()
+```
+
+Again, OLS is a technique that chooses the values of $b_1$, $b_2$, and $a$ that minimize these errors. 
+
+## Presenting results
+How should you present and talk about regression estimates?
+
+B
+What do I tell people about this? Just interpret the slope coefficient: *The expected corruption score drops by 0.008 for a one-point increase in women in parliament. The relationship is statistically significant $p < 0.05$.*
+
+
+
+
+
+## Bivariate models
 Regression analysis begins with a regression equation, or a model of the expected value of the outcome variable. Consider a model that treats the expected value of $Y$ as a linear function of $X$:
 
 $$
@@ -109,7 +377,6 @@ y_i &= E(y) + e_i \\
 \end{aligned}
 $$
 
-Acknowledging the inevitability of error, we still might think that a well-chosen line is one with less error. This is the logic of Ordinary Least Squares (OLS) regression. OLS is a method of choosing parameters of a linear model, $\beta$ and $\theta$, that minimize the sum of squared errors, $\min \sum e_i^2$. 
 
 
 Try regressing `vdem_corr` on `wdi_wip`. Then generate the linear prediction and calculate error for each case.
@@ -184,7 +451,7 @@ or the distance between the observed and predicted values of $Y$. In the uncondi
   lm(vdem_corr ~ 1, qog)
 ```
 
-## Binary predictors (dummies)  
+## Categorical predictor variables 
 Assume that you have a binary exposure variable, $X$, and you want to compare the group means?
 
 ```{r table}
@@ -202,9 +469,12 @@ What if you include it as a predictor in the regression model. What happens?
 ```
 What do the intercept and coefficient here represent? The interpretation of the slope coefficient follows the prior example, but it's important to note that a one-unit increase in $X$ means a shift from 0 to 1 (e.g., average difference in corruption for a democracy relative to non-democracy).
 
-## Lots of categories
 What do you do with a polytomous variable? Include them! The binary predictor (identifying two groups) enters the model as a single dummy variable. For multiple categories, include a dummy variable for each category except one. The excluded category becomes the reference. 
+
+
+# More advanced topics
 
 ## Linear transformation
 What about when the mean is not an appropriate representation of central tendency? 
 
+## Cross section time series data
