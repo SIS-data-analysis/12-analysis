@@ -553,7 +553,7 @@ Again, the coefficient on GDP attenuates when controlling for linear time trends
 ## Lagged variables
 One great thing with panel data is that you can use prior measures of the regressors (lagged values) to predict current outcomes. This allows you to ensure proper temporal ordering, and it's a massive advantage when trying to identify causal impact. You can also think of prior measures of the outcome varible as an option. It's not always the right choice, but a very useful tool to have at the ready.
 
-```{r lags}
+```{r lags, results = 'asis'}
 # Generate lagged vars
   df = df %>%
     group_by(country) %>%
