@@ -449,7 +449,7 @@ To test the significance of `nelda_mbbe` as a whole, use ANOVA:
 ```
 
 
-## Linear transformation
+## Log transformations
 What if the mean is not an appropriate representation of central tendency? The mean is sensitive to the presence of outliers, or extreme values of a distribution. When outliers cluster on one side of the distribution, the mean is pulled away from the median, creating skewness. That's a problem insofar as linear regression is a model of the mean, and skewness renders the mean an inappropriate statistic.
 
 So we have to fix it. The most common scenario is positive skew in the outcome and/or predictors, and the most common solution is the log transformation. Consider the following with GDP per capita:
@@ -496,4 +496,82 @@ Note two important points about the log-transformation in practice:
   
   
 
-## Longitudinal data
+# Longitudinal data
+I have repeated (over-time) observations for the units in my data. Can I just treat it like normal data? No.
+
+
+## Data
+For ease, let's use the `gapminder` data. This is country-year level data with repeated (annual) records for each country.
+
+```{r gapdata}
+# Use gapminder data
+  df = gapminder::gapminder
+```
+
+## Unit fixed effects
+One assumption of the linear model is that the units in your data are independent (e.g., respondent 1 is a fully separate individual from respondent 2 in a survey). Are Brazil 1993 and Brazil 1994 a fully independent observations? No. So we're in trouble.
+
+One option to manage this problem in the regression context is to estimate unit fixed effects (FE). Specify the model:
+
+$$
+Y_{i,t} = \beta_1 X_{i,t} + \beta_2 Z_{i,t} + \pi_i + \theta + e_{i,t}
+$$
+
+where $Y_{i,t}$ is unit $i$'s measured response at time $t$ and $\pi_i$ is the FE. It represents a dummy variable, or unique y-intercept, for every unit, $i$, in the data. 
+
+Including a fixed effect term has some wonderful benefits. Yes, mathematically, it's just a bunch of unit-specific intercepts. But, practically, that controls for any and all *fixed* or long-term factors unique to a unit. 
+
+To see this in practice, regress `lifeExp` on `gdpPercap` with and without fixed effects.
+
+```{r olsfe, results = 'asis'}
+# Estimate models
+  mod1 = lm(lifeExp ~ I(gdpPercap/1000) + log(pop), data = df)
+  mod2 = lm(lifeExp ~ I(gdpPercap/1000) + log(pop) + country, data = df)
+  
+# table
+  stargazer(mod2, mod1, type = 'html', keep.stat = 'n', 
+            omit = 'country', omit.labels = 'Country FE')
+```
+
+Take note of how the coefficient estimates change when we include the country fixed effects. Note further that, with FEs, you can interpret the coefficients as expected within-unit changes in the outcome. 
+
+## Temporal trends
+Consider that the outcome and treatment variables may be moving globally over time. If so, you want to control for these temporal trends. If you do not, you may find a spurious correlation driven by these baseline trends.
+
+```{r timetrends, results = 'asis'}
+# Estimate models
+  mod3 = lm(lifeExp ~ I(gdpPercap/1000) + log(pop) + year + country, data = df)
+  mod4 = lm(lifeExp ~ I(gdpPercap/1000) + log(pop) + year, data = df)
+  
+# table
+  stargazer(mod3, mod4, mod2, mod1, type = 'html', keep.stat = 'n', 
+            omit = 'country', omit.labels = 'Country FE')
+```
+
+Again, the coefficient on GDP attenuates when controlling for linear time trends. This indicates that some of the association in the basic FE specification corresponds with general global trends in GDP and life expectancy.
+
+## Lagged variables
+One great thing with panel data is that you can use prior measures of the regressors (lagged values) to predict current outcomes. This allows you to ensure proper temporal ordering, and it's a massive advantage when trying to identify causal impact. You can also think of prior measures of the outcome varible as an option. It's not always the right choice, but a very useful tool to have at the ready.
+
+```{r lags}
+# Generate lagged vars
+  df = df %>%
+    group_by(country) %>%
+    mutate(
+      lifeLag = lag(lifeExp, n = 1, order_by = year),
+      popLag = lag(pop, n = 1, order_by = year),
+      gdpLag = lag(gdpPercap, n = 1, order_by = year)
+    )
+
+# Estimate models
+  l1 = lm(lifeExp ~ log(gdpLag) + log(popLag) + country, data = df)
+  l2 = lm(lifeExp ~ lifeLag + country, data = df)
+  l3 = lm(lifeExp ~ lifeLag + log(gdpLag) + log(popLag) + year + country, data = df)
+
+  stargazer(l1, l2, l3, type = 'html', keep.stat = 'n', 
+            omit = 'country', omit.labels = 'Country FE')
+```
+
+Note that the effect quickly disappears with the inclusion of the lagged outcome variable, which very nearly predicts future outcomes without error. And here is a key problem to keep in mind: adding time trends and lagged outcome measures is appropriate when modeling outcomes that *actually vary* over time.
+
+One of the most important things to say about regression models with longitudinal data is that there's a heavy dose of alchemy here. Some choices are sort of right some of the time and sort of wrong some of the time. Which is right for you? Hard to say, but a good rule of thumb might be to keep it simple and talk to those econ/stats/methods PhD types when you have hard questions on this kind of work.
