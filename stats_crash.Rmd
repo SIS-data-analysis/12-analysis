@@ -23,7 +23,7 @@ output:
 
 ## Global options
 knitr::opts_chunk$set(
-  echo = T, eval = F, prompt = F,  tidy = F, 
+  echo = T, eval = T, prompt = F,  tidy = F, 
   comment = NA, message = F, warning = F
 )
 ```
@@ -79,16 +79,15 @@ A few terms to keep straight:
 
 
 ## Data and packages  
-Use the Quality of Government (QOG) Standard data (version Jan23, cross section). Refer to [the QOG codebook](https://www.qogdata.pol.gu.se/data/std_codebook_jan23.pdf) for further description of the data.
+Use an abridged version of the Quality of Government (QOG) Standard data (version Jan23, cross section). Refer to [the QOG codebook](https://www.qogdata.pol.gu.se/data/std_codebook_jan23.pdf) for further description of the data.
 
 ```{r data}
 # load QOG data
-  qog = haven::read_dta('qog_std_cs_jan23_stata14.dta') %>%
-    mutate(across(where(haven::is.labelled), as_factor))
+  load('qog23ex.rdata')
 ```
 
 I rely on several packages for this exercise:
-```{r packs}
+```{r packs, eval = F}
 # load packages
   library(tidyverse)
   library(knitr)
@@ -96,6 +95,7 @@ I rely on several packages for this exercise:
   library(stargazer)
   library(kableExtra)
 ```
+
 # Numeric outcome variable
 I have a numeric variable, and I want to tell the world all about it. What now? All roads eventually lead to the mean. It's not quite true, but it's pretty close. Keep that in mind here, and refer to the later sections on the transformations we might consider to mitigate skew (i.e., to normalize a distribution so that we can use the mean!).
 
@@ -109,13 +109,10 @@ The best place to start is with the relevant moments and ranks of the distributi
 - skewness
 - any interesting or unusual features/patterns
 
-You can use the classic `summary()` function to get most of this. You can also use `summarize()` from `tidyverse` for a more tailored (and table friendly) output.
+You can use the classic `summary()` function to get most of this. I'll show the `tidyverse` approach here for a more tailored output.
 
 ```{r sumstats}
-# Summary stats 
-  summary(qog$wdi_wip)
-
-# Tidyverse approach
+# summarise in tidyverse
   summarise(qog,
     n = sum(!is.na(wdi_wip)),
     Avg = mean(wdi_wip, na.rm = T),
@@ -206,6 +203,7 @@ Evaluate the argument that women's representation is significantly lower in majo
 # Difference of means test
   t.test(wdi_wip ~ br_pvote, data = qog, alternative = 'less')
 ```
+
 Note the line of statistics: `t = -4.832, df = 185, p-value = 1.414e-06`. Use these to describe the results. I find that women hold significantly fewer seats in non-PR systems than where seats are allocated proportionally. Specifically, women hold an average of 19% of seats in national parliament in non-PR electoral systems compared to 27% of seats in PR systems. It is unlikely we observe this difference by chance alone $(t = -4.83, df = 185, p < 0.05)$. 
 
 Next consider representation across region. ANOVA tests the null hypothesis that the group means are all equal $(\mu_1 = \mu_2 = \mu_3 ...)$.
@@ -267,15 +265,16 @@ We use cross-tabs to evaluate associations between categorical variables. The ke
     add_header_above(header = c(" " = 1, "PR system" = 2, " " = 1))
 
 ```
+
 You can see there is a relationship between electoral system and the presence of media bias prior to an election. Among non-PR systems, 51% see media bias in advance of the election and roughly 45% do not. In PR systems, by contrast, less than one-third see the bias and nearly two-thirds do not.  The differences are statistically significant $(\chi^2_{df=2}=6.64,~p=0.04)$. 
 
 
 # Linear regression
 
-Linear regression allows us to model the association between a continuous outcome variable, $Y$, and some set of explanatory variables, e.g., $X$ and $Z$. It's an incredibly flexible and powerful tool, especially for estimating conditional effects, or reducing potential bias due to confounding. 
+Linear regression allows you to model the association between a continuous outcome variable, $Y$, and some set of explanatory variables, e.g., $X$ and $Z$. It's a flexible and powerful tool, especially for estimating conditional effects, or reducing potential bias due to confounding. 
 
 ## Regression model
-We begin by modelling the outcome as a linear function of some covariates and an error term. For example:
+We begin by modelling the outcome variable as a linear function of some covariates, $X$ and $Y$, and an error term, $e$. For example:
 
 $$
 Y_i = \beta_1 X_i + \beta_2 Z_i + \theta + e_i
@@ -285,19 +284,19 @@ where:
 - $\beta_1$ the partial slope coefficient on $X$; indicates the expected change in $Y$ for a unit-increase in $X$ while holding $Z$ fixed  
 - $\beta_2$ the partial slope coef. on $Z$; indicates expected change in $Y$ for a unit-increse in $Z$ while holding $X$ fixed  
 - $\theta$ the intercept or constant; represents $E(Y|X = Z = 0)$
-- $e_i$ is the error term; represents residual variation in $Y$ and captures both random noise and influence of other causes of $Y$ not included in the model. 
+- $e_i$ is the error term; represents residual variation in $Y_i$ and captures both random noise and influence of other causes of $Y$ not included in the model. 
 
-Our primary interest is the estimate of $\beta_1$. However, to estimate this parameter without bias, we must include any potential confounder as a covariate in the model. If, for example, we mistakenly ignore $Z$ and specify the bivariate model:
+The focal point of the analysis is the estimate of $\beta_1$. However, to estimate this parameter without bias, you must include any potential confounder as a covariate in the model. If, for example, we assume the model above is true and complete, but mistakenly ignore $Z$ and specify the model:
 
 $$
 Y_i = \beta_1^* X_i + \theta^* + e_i
 $$
 
-then the estimated coefficient on $X$ will be biased: $\beta_1^* \neq \beta_1$. So take care in specifying your regression models and be sure to identify and include any factor you suspect is correlated with both $Y$ and $X$.
+The estimated slope coefficient from this model will be biased $(\beta_1^* \neq \beta_1)$ when the treatment and control variables are correlated, $r_{X,Z} \neq 0$. So take care in specifying your regression models, and be sure to include any factor you suspect is correlated with both $Y$ and $X$.
 
 
 ## OLS estimation
-We typically use ordinary least squares (OLS) to estimate the parameters of a regression equation. The logic is very simple: find the values of the parameters the jointly minimize the sum of squared errors, $\min \sum e_i^2$. This gives us the estimates from our sample data:
+Ordinary Least Squares (OLS) is a technique for estimating the parameters of a regression equation. The logic is very simple: find the values of the parameters the jointly minimize the sum of squared errors, $\min \sum e_i^2$. This gives us the estimates from our sample data:
 
 $$
 \begin{aligned}
@@ -305,6 +304,7 @@ Y_i &= E(Y|X,Z) + e_i \\
     &= (b_1 X_i + b_2 Z_i + a) + e_i
 \end{aligned}
 $$
+where $b_1$ is the OLS estimate of $\beta_1$, $b_2$ the estimate of $\beta_2$ and $a$ the estimate of $\theta$.
 
 Note that the error term is equal to the difference between the observed $Y$ in the data and the expected value of $Y$ from the model. Rearranging from above:
 
@@ -339,142 +339,161 @@ Visualize the relationship and think about the prediction and the error respecti
   theme_minimal()
 ```
 
-Again, OLS is a technique that chooses the values of $b_1$, $b_2$, and $a$ that minimize these errors. 
+Again, OLS is a technique that chooses the values of $b_1$, $b_2$, and $a$ that minimize these errors. In fact, the OLS estimator is "BLUE", or the best, linear unbiased estimator.  
+
 
 ## Presenting results
-How should you present and talk about regression estimates?
-
-B
-What do I tell people about this? Just interpret the slope coefficient: *The expected corruption score drops by 0.008 for a one-point increase in women in parliament. The relationship is statistically significant $p < 0.05$.*
+How should you present and talk about regression estimates? Good question. Start by making a table of estimates, ideally with two or three specifications. The table below shows the unconditional relationship, one conditional on level of democracy, and another with controls for wealth and regional effects.
 
 
-
-
-
-## Bivariate models
-Regression analysis begins with a regression equation, or a model of the expected value of the outcome variable. Consider a model that treats the expected value of $Y$ as a linear function of $X$:
-
-$$
-E(Y|X) = \beta X_i + \theta
-$$
-
-with two coefficients:  
-- $\beta$, the expected change in $Y$ for a unit-increase in $X$
-- $\theta$, the constant, or $E(Y|X = 0)$
-
-This a model chosen to represent the relationship of interest; it isn't meant to predict $Y$ without error. We define error, $e_i$ as:
-
-$$
-e_i = Y_i - E(Y)
-$$
-
-or the distance between the observed and predicted values of $Y$. We can re-arrange terms above to see that the observed values are equal to the expectation (the line) plus error:
-
-$$
-\begin{aligned}
-y_i &= E(y) + e_i \\
-    &= (\beta x_i + \alpha) + e_i
-\end{aligned}
-$$
-
-
-
-Try regressing `vdem_corr` on `wdi_wip`. Then generate the linear prediction and calculate error for each case.
-
-```{r err}
-  library(modelr)
-
-# Estimate model
+```{r mulreg, results = 'asis'}
+# estimate models
   mod1 = lm(vdem_corr ~ wdi_wip, data = qog)
-    mod1
-    
-  select(qog, cname, vdem_corr, wdi_wip) %>%
-    na.omit() %>%
-    add_predictions(mod1, var = 'pred') %>% # adds model predictions
-    mutate(error = vdem_corr - pred) %>% # calculate error
-    DT::datatable() %>%
-    DT::formatRound(columns = 2:5, digits = 2)
+  mod2 = lm(vdem_corr ~ wdi_wip + vdem_libdem, data = qog)
+  mod3 = lm(vdem_corr ~ wdi_wip + vdem_libdem + 
+              log(wdi_gdpcapcur) + ht_region, data = qog)
+
+# table of estimates
+  stargazer(mod1, mod2, mod3, type = 'html', keep.stat = 'n')
+```
+
+What do I tell people about this? If you're giving a *short presentation to a lay audience*, say very little. You might, for example, show the bivariate plot and mention that the relationship is significant and robust to different controls. 
+
+If you're *writing a report*, you need to describe your approach, show the table, and take care to interpret the estimates. Why control for these variables? Is the estimate stable across models? In terms of the results I might note:
+
+- In the unconditional model (1), expected corruption scores drop by 0.008 for a percentage-point increase in women's rep. The relationship is significant $(p<0.05)$.
+- The estimate attenuates in the conditional models with the estimated change in corruption score dropping to -0.004 when controlling for level of democracy, wealth, and region.
+
+As a note for yourself, notice the bias present in the unconditional estimate. It changes in the presence of different control variables (meaning that the unconditional estimate absorbed some of the effect of wealth, democracy, region, and more).
+
+
+## Proof of conditional effect  
+Multiple regression promises as a conditional effect. In the models above, the estimated coefficient on the treatment variable, $b_1$, represents the impact of $X$ on $Y$ while holding $Z$ constant. Cool story, bro. It has an aura of "magical thinking" to it. So prove it to yourself using the comparison between models 1 and 2 above.
+
+Step 1 is to "exogenize" $Y$ and $X$, or to strip away the variation in $Y$ and $X$ that is common to $Z$:
+
+```{r exogy}
+# Isolate cases in full model
+  qog2 = qog %>%
+    select(vdem_corr, wdi_wip, vdem_libdem) %>%
+    na.omit()
+
+# Regress Y on Z
+  m1 = lm(vdem_corr ~ vdem_libdem, data = qog2)
+
+# Regress X on Z
+  m2 = lm(wdi_wip ~ vdem_libdem, data = qog2)
   
 ```
 
-What do I tell people about this? Just interpret the slope coefficient: *The expected corruption score drops by 0.008 for a one-point increase in women in parliament. The relationship is statistically significant $p < 0.05$.*
+Step 2 is to calculate the residual variation from each estimate. Recall that the error term reflects variation in the outcome *not* explained by the predictors. In this case, it's the part of `vdem_corr` and `wdi_wip` not explained by `vdem_libdem`.
 
-Visualize the relationship and think about the prediction and the error respectively.
-
-```{r plot}
-  ggplot(qog, aes(y = vdem_corr, x = wdi_wip)) +
-  geom_point(shape = 21) +
-  geom_smooth(method = 'lm') +
-  theme_minimal()
+```{r resids}
+# Generate residuals as variables in qog
+  qog2 = qog2 %>%
+    add_predictions(m1, var = 'pred.corr') %>%
+    add_predictions(m2, var = 'pred.wip') %>%
+    mutate(
+      e.corr = vdem_corr - pred.corr,
+      e.wip = wdi_wip - pred.wip
+    )
+    
 ```
 
-## Multiple regression
-Imagine that variable $Z$ is correlated with both $X$ and $Y$. The appropriate model to estimate, in this case, would be:
+Step 3 is to use the residuals from each model, the part of $Y$ and $X$ exogenous to $Z$, in a final regression:
 
-$$
-E(Y|X,Z) = \beta_1 X_i + \beta_2 Z_i + \theta
-$$
-Where the key coefficient is $\beta_1$: the expected change in $Y$ for a unit-increase in $X$, net of $Z$.
+```{r proofcon}
+# Regress e.corr on e.wip
+  lm(e.corr ~ e.wip, qog2)
 
-The critical point is that if you ignore $Z$ and estimate the bivariate model $(\beta X_i + \theta)$ in this context, the bivariate slope coefficient, $\beta$ suffers from confounding bias. In essence, it absorbs some of the association between $Z$ and $Y$, and the estimate is not truly "independent" of other factors.
-
-Give it a try:
-
-```{r multi, results='asis'}
-# multiple reg
-  mod2 = lm(vdem_corr ~ wdi_wip + undp_hdi, qog)
-
-# table
-  stargazer(mod1, mod2, type = 'html', keep.stat = 'n')
-```
-Now interpret the findings.
-
-## Without predictors
-We don't actually need any covariates in a linear regression model. Consider the simplest case of the unconditional expectation:
-
-$$
-E(Y) = \theta
-$$
-where $\theta$ is a parameter of a line, specifically the intercept of a horizontal line. As above, the aim with OLS regression is to select the line that minimizes error:
-
-$$
-e_i = Y_i - E(Y)
-$$
-or the distance between the observed and predicted values of $Y$. In the unconditional model, the value that minimizes error is simply the mean of $Y$, $\theta = \mu$. Again, regression is just a model of the mean. To see this in practice, calculate the mean of `vdem_corr` and then estimate a regression of `vdem_corr` on a constant, 1.
-
-
-```{r mean}
-# Calculate the mean  
-  mean(qog$vdem_corr, na.rm = T)
-
-# Regression as model of the mean
-  lm(vdem_corr ~ 1, qog)
 ```
 
-## Categorical predictor variables 
-Assume that you have a binary exposure variable, $X$, and you want to compare the group means?
-
-```{r table}
-# calculate group means
-  group_by(qog, br_dem) %>%
-    summarize(mean = mean(vdem_corr, na.rm = T))
-```
-
-What if you include it as a predictor in the regression model. What happens? 
-
-```{r regbin, results = 'asis'}
-# regression
-  mod2 = lm(vdem_corr ~ br_dem, qog)
-  stargazer(mod2, type = 'html', keep.stat = 'n')
-```
-What do the intercept and coefficient here represent? The interpretation of the slope coefficient follows the prior example, but it's important to note that a one-unit increase in $X$ means a shift from 0 to 1 (e.g., average difference in corruption for a democracy relative to non-democracy).
-
-What do you do with a polytomous variable? Include them! The binary predictor (identifying two groups) enters the model as a single dummy variable. For multiple categories, include a dummy variable for each category except one. The excluded category becomes the reference. 
+Compare the estimated coefficient to the coefficient on `wdi_wip` in model 2 from the prior section. Same. So partial slope coefficients in multiple regression really do "strip away" the confounding influence of the covariates, yielding the assocaition between the outcome and each predictor variable independent of the other variables in the model.
 
 
 # More advanced topics
+It's not always so easy. Some things come up that require a bit more attention.
+
+## Categorical predictor variables 
+Assume that you have a categorical independent variable, $X$ or $Z$. Can you use it in regression analysis? Yes. You simply include a binary indicator (dummy) for all but one category of the variable. If you have a factor with three levels, include a dummy for two levels; the excluded level becomes the reference category, and the coefficients on the dummies represent the difference of means for the included vs excluded category.
+
+Check the regression tables from the prior section. We controlled for `ht_region` in model 3. It entered the model as a series of dummies for each region. The excluded, or reference, category was Eastern Europe and post Soviet Union.
+
+Consider media bias before an election, `nelda_mbbe`, as a predictor of corruption. Calculate the mean `vdem_corr` for each category of media bias:
+
+```{r table}
+# calculate group means
+  group_by(qog, nelda_mbbe) %>%
+    summarize(mean = mean(vdem_corr, na.rm = T))
+```
+
+Now try the same approach with regression:
+
+```{r dumm, results = 'asis'}
+# Estimate
+  catmod = lm(vdem_corr ~ nelda_mbbe, qog)
+
+# Table
+  stargazer(catmod, type = 'html', keep.stat = 'n')
+```
+
+The constant becomes the excluded category, "no media bias". Recall that the constant represents the expected outcome when the predictors equal zero. In this case, a zero on both dummy variables means that the country is scored as "no media bias" on `nelda_mbbe`. 
+
+The coefficients on the included categories, then, represent the difference in means relative to this excluded category. From the table above, the mean corruption score for "Yes" was 0.64, which is equal to 0.35 + 0.29. You would interpret this by reporting that expected corruption is 0.29 points higher in "Yes" countries relative to "No" countries, and the difference is statistically significant.
+
+To test the significance of `nelda_mbbe` as a whole, use ANOVA:
+
+```{r aov2}
+# Get your ANOVA stats
+  aov(catmod) %>% summary(.)
+```
+
 
 ## Linear transformation
-What about when the mean is not an appropriate representation of central tendency? 
+What if the mean is not an appropriate representation of central tendency? The mean is sensitive to the presence of outliers, or extreme values of a distribution. When outliers cluster on one side of the distribution, the mean is pulled away from the median, creating skewness. That's a problem insofar as linear regression is a model of the mean, and skewness renders the mean an inappropriate statistic.
 
-## Cross section time series data
+So we have to fix it. The most common scenario is positive skew in the outcome and/or predictors, and the most common solution is the log transformation. Consider the following with GDP per capita:
+
+```{r logplot}
+# Plot gdp and log(gdp)
+  qog %>%
+    mutate(loggdp = log(wdi_gdpcapcur)) %>%
+    pivot_longer(cols = contains('gdp')) %>%
+    ggplot(aes(x = value)) +
+    geom_histogram(color = 'white') +
+    facet_wrap(fct_rev(name) ~ ., scales = 'free')
+
+```
+
+While there is severe positive skew in the original metric, the log transformation "normalizes" the distribution. 
+
+The impact of skewness is very similar in the linear regression context. Consider the regression of `vdem_corr` on raw and transformed GDP per capita:
+
+```{r plotlog}
+# 
+  qog %>%
+    mutate(loggdp = log(wdi_gdpcapcur)) %>%
+    pivot_longer(cols = contains('gdp')) %>%
+    ggplot(aes(x = value, y = vdem_corr)) +
+    geom_point(shape = 21) +
+    geom_smooth(method = 'loess', color = 'red', se = F) +
+    geom_smooth(method = 'lm', se = F) +
+    facet_wrap(fct_rev(name) ~ ., scales = 'free')
+```
+
+Look at the left panel, where we do nothing about positive skew in $X$. The blue line is the linear regression estimate. It is a very poor representation of the relationship. This is no surprise as we are trying to force a straight line onto a curvilinear pattern. The red line is the loess estimator, and shows this curvilinearity (the result of skew).
+
+The right-hand panel shows the relationshp with the log-transformed predictor. Here the straight line from OLS does a good job fitting the data. 
+
+Note two important points about the log-transformation in practice:  
+
+- It addresses positive skew for positively-valued variables. When we encounter a skewed variable with zeroes (e.g., terror attacks for the month), you must use the log + 1 transformation: `lnX = log(1 + X)` as `log(0)` is undefined.   
+- Interpreting the coefficients in a log-transformed model is tricky if you want to frame it in the original metrics. Consider the interpretation of estimate $b$ in different scenarios.  
+  - $Y_i = b X_i + a$: $b$ is the unit-change in $Y$ for a unit increase in $X$.  
+  - $log(Y_i) = b*log(X_i) + a$: $b$ is the percentage change in $Y$ for a one percent increase in $X$.  
+  - $Y_i = b * log(X_i) + a$: $b/100$ is the unit-change in $Y$ for a one percent increase in $X$.  
+  - $log(Y_i) = b X_i + a$: $100 * (e^b - 1)$ is the percentage change in $Y$ for a unit-increase in $X$. (In `r`: `100 * (exp(b) - 1)`)
+  
+  
+
+## Longitudinal data
