@@ -8,7 +8,17 @@ Step beyond data wrangling and visualization and into the world of statistical a
 - See also Ch 7 of Winston Chang's [Cookbook for R](http://www.cookbook-r.com/)
 - Data for class [coming soon]
 - [`posterdown` package](https://github.com/brentthorne/posterdown) and [lengthier example](https://shilaan.rbind.io/post/academic-conference-posters-using-posterdown/) of using it
-- 
+
+```
+# Installing posterdown and some key dependencies
+  install.packages('posterdown')
+  
+# Check on tinytex
+  tinytex::is_tinytex() # if TRUE, you're all done! if false, proceed to next step
+    install.packages('tinytex') # if you haven't already
+    tinytex::install_tinytex()
+      tinytex::is_tinytex() # if TRUE, all done
+```
 
 ## Assessment
 - Poster: submit electronically via Canvas April 21.
