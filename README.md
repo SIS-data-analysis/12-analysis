@@ -9,6 +9,8 @@ Step beyond data wrangling and visualization and into the world of statistical a
 - Data for class [coming soon]
 - [`posterdown` package](https://github.com/brentthorne/posterdown) and [lengthier example](https://shilaan.rbind.io/post/academic-conference-posters-using-posterdown/) of using it
 
+Installing first time:
+
 ```
 # Installing posterdown and some key dependencies
   install.packages('posterdown')
