@@ -20,5 +20,37 @@ Step beyond data wrangling and visualization and into the world of statistical a
       tinytex::is_tinytex() # if TRUE, all done
 ```
 
+Consider also a YAML for the `posterdown` option:
+
+```
+---
+title: '**Title of my paper or project**'
+author:
+  - name: '**My Name**'
+    affil: 1
+    main: true
+    twitter: myname123 
+    email: myname@myhouse
+affiliation:
+  - num: 1
+    address: Department of things, My Uni
+main_findings:
+  - "I have some things to say"
+  - "I found **really important** things, and you should cite me!"
+main_topsize: 0.2 
+main_bottomsize: 0.1
+primary_colour: "#0063B2FF"
+secondary_colour: "#9CC3D5FF"
+accent_colour: "#cc0000"
+output: 
+  posterdown::posterdown_betterport:
+    self_contained: false
+    pandoc_args: --mathjax
+    number_sections: false
+bibliography: packages.bib
+link-citations: true
+---
+```
+
 ## Assessment
 - Poster: submit electronically via Canvas April 21.
